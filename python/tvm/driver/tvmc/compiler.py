@@ -94,6 +94,10 @@ def add_compile_parser(subparsers):
     )
     generate_target_args(parser)
     parser.add_argument(
+        "--target-host",
+        help="compilation host target string"
+    )
+    parser.add_argument(
         "--tuning-records",
         metavar="PATH",
         default="",

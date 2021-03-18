@@ -323,6 +323,7 @@ def add_annotate_fn(expr):  # pylint: disable=unused-variable
     # Scalars require explicit batch mode.
     if get_tensorrt_use_implicit_batch_mode() and any([len(shape) < 1 for shape in shapes]):
         return False
+    # TODO(Maruoka): Is it correct to annotate scalar addition?
 
     if any([x.checked_type.dtype != "float32" for x in args]):
         logger.info("Only float32 inputs are supported for TensorRT.")

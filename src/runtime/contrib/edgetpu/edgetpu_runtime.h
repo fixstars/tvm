@@ -44,6 +44,7 @@ namespace runtime {
  */
 class EdgeTPURuntime : public TFLiteRuntime {
  public:
+  ~EdgeTPURuntime() { interpreter_.reset(); }
   /*!
    * \brief Destructor of EdgeTPURuntime.
    *

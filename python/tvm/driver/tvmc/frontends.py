@@ -292,6 +292,58 @@ class PaddleFrontend(Frontend):
         return relay.frontend.from_paddle(prog, shape_dict=shape_dict, **kwargs)
 
 
+class DarknetFrontend(Frontend):
+    """ Darknet frontend for TVMC """
+
+    @staticmethod
+    def name():
+        return "darknet"
+
+    @staticmethod
+    def suffixes():
+        # Torch Script is a zip file, but can be named pth
+        return ["weights"]
+
+    def load(self, path, shape_dict=None):
+        """ path indicates weight file (.weights)
+        assume .cfg file exists in the same directory as weight file. """
+        # pylint: disable=C0415
+        import sys
+        import os
+        from tvm.relay.testing.darknet import __darknetffi__
+        path = str(path)
+        weights_path = path
+        cfg_path = path[:path.rindex('.')] + ".cfg"
+        if not os.path.exists(cfg_path):
+            raise FileNotFoundError("darknet cfg file was not found in %s" % cfg_path)
+        if shape_dict is not None and len(shape_dict) is not 1:
+            raise TVMCException("the number of input-shape must be one for %s" % self.name())
+
+        # Load darknet library
+        if sys.platform in ["linux", "linux2"]:
+            DARKNET_LIB = "libdarknet2.0.so"
+        elif sys.platform == "darwin":
+            DARKNET_LIB = "libdarknet_mac2.0.so"
+        else:
+            err = "Darknet lib is not supported on {} platform".format(sys.platform)
+            raise NotImplementedError(err)
+        
+        TVM_DARKNET_LIB_DIR = os.getenv("TVM_DARKNET_LIB_DIR", "/usr/lib")
+        lib_path = f"{TVM_DARKNET_LIB_DIR}/{DARKNET_LIB}"
+
+        if not os.path.exists(lib_path):
+            raise FileNotFoundError(f"{DARKNET_LIB} is not found in {lib_path}")
+            
+        DARKNET_LIB = __darknetffi__.dlopen(lib_path)
+        net = DARKNET_LIB.load_network(cfg_path.encode("utf-8"), weights_path.encode("utf-8"), 0)
+
+        input_shape = list(shape_dict.values())[0].shape if shape_dict is not None else (1, net.c, net.h, net.w)
+
+        logger.debug("parse Darknet model and convert into Relay computation graph")
+        dtype = 'float32'
+
+        return relay.frontend.from_darknet(net, dtype=dtype, shape=input_shape)
+
 ALL_FRONTENDS = [
     KerasFrontend,
     OnnxFrontend,
@@ -299,6 +351,7 @@ ALL_FRONTENDS = [
     TFLiteFrontend,
     PyTorchFrontend,
     PaddleFrontend,
+    DarknetFrontend
 ]
 
 

@@ -149,6 +149,7 @@ def partition_for_tensorrt(
                 }
             ),
             transform.FoldConstant(),
+            transform.DynamicToStatic(),
             transform.AnnotateTarget("tensorrt"),
             transform.MergeCompilerRegions(),
             transform.PartitionGraph(),

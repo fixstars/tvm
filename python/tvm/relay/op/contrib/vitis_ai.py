@@ -178,6 +178,7 @@ def partition_for_vitis_ai(mod, params=None, dpu=None, **opts):
             transform.ConvertLayout(desired_layouts_in_partition),
             transform.FoldConstant(),
             transform.InferType(),
+            transform.FoldConstant(),
             VitisAIAnnotationPass("vitis_ai", dpu, params),
             transform.MergeCompilerRegions(),
             transform.PartitionGraph(),

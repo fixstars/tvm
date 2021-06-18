@@ -189,4 +189,5 @@ def partition_for_vitis_ai(mod, params=None, dpu=None, **opts):
     )
 
     with tvm.transform.PassContext(opt_level=3):
-        return seq(mod)
+        config = None
+        return seq(mod), config

@@ -709,6 +709,15 @@ def compute_upsampling(attrs, inputs, out_dtype):
     align_corners = attrs.align_corners
     return [topi.nn.upsampling(inputs[0], scale_h, scale_w, layout, method, align_corners)]
 
+@reg.register_convert_op_layout("nn.upsampling")
+def convert_upsampling(attrs, inputs, tinfos, desired_layouts):
+    from tvm import relay
+    assert len(desired_layouts) == 1
+    desired_layout = desired_layouts[0]
+    data = inputs
+    new_attrs = dict(attrs)
+    new_attrs['layout'] = desired_layout
+    return relay.nn.upsampling(data[0], **new_attrs)
 
 reg.register_injective_schedule("nn.upsampling")
 

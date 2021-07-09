@@ -18,6 +18,7 @@
 """Sort related operators """
 import tvm
 from tvm import te
+from tvm.contrib import nvcc
 
 from .injective import schedule_injective_from_existing
 from ..transform import strided_slice, transpose
@@ -221,7 +222,11 @@ def _sort_common(
     ##    finds the start/end locations of the inner mergepath so that we can split
     ##    the merge into more blocks
 
-    max_threads = int(tvm.target.Target.current(allow_none=False).max_num_threads)
+    target = tvm.target.Target.current(allow_none=False)
+    max_threads = int(target.max_num_threads)
+    if target.kind.name == "cuda":
+        if nvcc.get_target_compute_version(target) in ["3.2", "5.3", "6.2"]:
+            max_threads = 512
     nthread_by = axis_mul_before * axis_mul_after
     nthread_bz = 1
     nthread_tx = max_threads

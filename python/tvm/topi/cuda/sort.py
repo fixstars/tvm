@@ -222,6 +222,9 @@ def _sort_common(
     ##    finds the start/end locations of the inner mergepath so that we can split
     ##    the merge into more blocks
 
+    # Some cuda architectures have smaller limit of 32K for cudaDevAttrMaxRegistersPerBlock
+    # vs 64K for most GPUs. Since this kernel uses many registers, the limit will　be exceeded
+    # with 1024 threads.
     target = tvm.target.Target.current(allow_none=False)
     max_threads = int(target.max_num_threads)
     if target.kind.name == "cuda":

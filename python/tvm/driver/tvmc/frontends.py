@@ -396,6 +396,53 @@ class DarknetFrontend(Frontend):
 
         return relay.frontend.from_darknet(net, dtype=dtype, shape=input_shape)
 
+
+class CaffeFrontend(Frontend):
+    """ Caffe frontend for TVMC """
+
+    @staticmethod
+    def name():
+        return "caffe"
+
+    @staticmethod
+    def suffixes():
+        return ["caffemodel"]
+
+    def load(self, path, shape_dict=None):
+        """ path indicates weight file (.weights)
+        assume .prototxt file exists in the same directory as caffemodel file. """
+        # pylint: disable=C0415
+        import sys
+        import os
+        import caffe
+        from caffe.proto import caffe_pb2 as pb
+        from google.protobuf import text_format
+
+        path = str(path)
+        caffemodel_path = path
+        prototxt_path = path[:path.rindex('.')] + ".prototxt"
+        if not os.path.exists(prototxt_path):
+            raise FileNotFoundError("Caffe prototxt file was not found in %s" % prototxt_path)
+        if shape_dict is not None and len(shape_dict) is not 1:
+            raise TVMCException("the number of input-shape must be one for %s" % self.name())
+
+        init_net = pb.NetParameter()
+        predict_net = pb.NetParameter()
+
+        # load model
+        with open(prototxt_path, "r") as f:
+            text_format.Merge(f.read(), predict_net)
+        # load bloc
+        with open(caffemodel_path, "rb") as f:
+            init_net.ParseFromString(f.read())
+
+        dtype_dict = dict()
+        for name in shape_dict.keys():
+            dtype_dict[name] = "float32"
+
+        return relay.frontend.from_caffe(init_net, predict_net, shape_dict, dtype_dict)
+ 
+
 ALL_FRONTENDS = [
     KerasFrontend,
     OnnxFrontend,
@@ -403,7 +450,8 @@ ALL_FRONTENDS = [
     TFLiteFrontend,
     PyTorchFrontend,
     PaddleFrontend,
-    DarknetFrontend
+    DarknetFrontend,
+    CaffeFrontend
 ]
 
 

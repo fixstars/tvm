@@ -126,6 +126,7 @@ class OperatorConverter(object):
             "MUL": self.convert_mul,
             "NEG": self.convert_neg,
             "NOT_EQUAL": self.convert_not_equal,
+            "NON_MAX_SUPPRESSION_V5": self.convert_nms_v5,
             "ONE_HOT": self.convert_one_hot,
             "PACK": self.convert_pack,
             "PAD": self.convert_pad,
@@ -3391,6 +3392,58 @@ class OperatorConverter(object):
         inv_scale = _op.divide(one, scale_expr)
         rounded = _op.floor(_op.add(_op.multiply(clamped_shifted, inv_scale), half))
         return _op.add(_op.multiply(rounded, scale_expr), nudged_min_expr)
+
+    # NOTE: Ported from the implementation for tensorflow
+    def convert_nms_v5(self, op):
+        input_tensors = self.get_input_tensors(op)
+        assert len(input_tensors) == 6, "input tensors length should be 6"
+
+        max_output_size = self.get_tensor_value(input_tensors[2])
+        iou_threshold = self.get_tensor_value(input_tensors[3])
+        score_threshold = self.get_tensor_value(input_tensors[4])
+        soft_nms_sigma = self.get_tensor_value(input_tensors[5])
+
+        scores = _op.expand_dims(self.get_tensor_expr(input_tensors[1]), -1, 1)
+        data = _op.concatenate([scores, self.get_tensor_expr(input_tensors[0])], -1)
+        data = _op.expand_dims(data, 0, 1)
+
+        ct, data, indices = _op.vision.get_valid_counts(data, score_threshold=score_threshold, id_index=-1, score_index=0)
+
+        # TensorFlow NMS doesn't have parameter top_k
+        top_k = -1
+        # TF doesn't have class id for nms input
+        score_index = 0
+        nms_ret = _op.vision.non_max_suppression(
+            data=data,
+            valid_count=ct,
+            indices=indices,
+            max_output_size=max_output_size,
+            iou_threshold=iou_threshold,
+            force_suppress=True,
+            top_k=top_k,
+            coord_start=1,
+            score_index=score_index,
+            id_index=-1,
+            return_indices=True,
+            invalid_to_bottom=False,
+        )
+
+        # squeeze it, TF NMS is not batched
+        size = _op.squeeze(nms_ret[1], axis=[1])
+        data_slice = _op.squeeze(nms_ret[0], axis=[0])
+
+        # slice to get the dynamic result
+        ret = _op.strided_slice(
+            data_slice, begin=[0], end=[100], slice_mode="size"
+        )
+
+        # NonMaxSuppressionV5 returns scores.
+        if soft_nms_sigma != 0:
+            raise tvm.error.OpAttributeUnImplemented(
+                "soft_nms_sigma for NonMaxSuppressionV5 is not supported"
+            )
+        ret_scores = _op.take(self.get_tensor_expr(input_tensors[1]), ret, axis=0)
+        return _expr.TupleWrapper(_expr.Tuple([ret, ret_scores, size]), 3)
 
     def get_expr(self, input_tensor_idx):
         return self.exp_tab.get_expr(get_tensor_name(self.subgraph, input_tensor_idx))

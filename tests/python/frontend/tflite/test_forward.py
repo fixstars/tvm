@@ -4187,6 +4187,90 @@ def test_custom_op_converter():
         np.squeeze(tvm_output_orig[0]), np.squeeze(tvm_output_dummy[0]), rtol=1e-5, atol=1e-5
     )
 
+# Non Max Suppression
+# ---------
+
+
+def _test_forward_nms_v5(
+    bx_shape, score_shape, iou_threshold, score_threshold, out_size, dtype="float32"
+):
+    with tf.Graph().as_default():
+        boxes = np.random.uniform(0, 10, size=bx_shape).astype(dtype)
+        scores = np.random.uniform(size=score_shape).astype(dtype)
+        max_output_size = np.int32(out_size)
+
+        in_data_1 = tf.placeholder(dtype, boxes.shape, name="in_data_1")
+        in_data_2 = tf.placeholder(dtype, scores.shape, name="in_data_2")
+        out = tf.raw_ops.NonMaxSuppressionV5(
+            boxes=in_data_1,
+            scores=in_data_2,
+            max_output_size=max_output_size,
+            iou_threshold=iou_threshold,
+            score_threshold=score_threshold,
+            soft_nms_sigma=0.0,
+        )
+
+        # NOTE: we cannot run compare_tflite_with_tvm.
+        # This is because the invalid box indices are different between tflite and tvm.
+
+        in_data = [boxes, scores]
+        in_name = ["in_data_1", "in_data_2"]
+        input_tensors = [in_data_1, in_data_2]
+        output_tensors = [out[0], out[1], out[2]]
+        output_names = ["out0", "out1", "out2"]
+        experimental_new_converter = True
+
+        in_data = convert_to_list(in_data)
+        in_name = convert_to_list(in_name)
+        out_names = convert_to_list(output_names)
+        in_node = [0] * len(in_name)
+        for i in range(len(in_name)):
+            in_node[i] = in_name[i].split(":")[0] if ":" in in_name[i] else in_name[i]
+
+        with tf.Session() as sess:
+            # convert to tflite model
+            converter = tf.lite.TFLiteConverter.from_session(sess, input_tensors, output_tensors)
+            converter.experimental_new_converter = experimental_new_converter
+
+            tflite_model_buffer = converter.convert()
+            tflite_output = run_tflite_graph(tflite_model_buffer, in_data)
+
+            for device in ["llvm"]:
+                dev = tvm.device(device, 0)
+                if not tvm.testing.device_enabled(device):
+                    print("Skip because %s is not enabled" % device)
+                    continue
+
+                tvm_output = run_tvm_graph(
+                    tflite_model_buffer,
+                    in_data,
+                    in_node,
+                    target=device,
+                    num_output=len(out_names),
+                    out_names=out_names,
+                    mode="graph_executor",
+                )
+
+            tflite_valid_indicies = tflite_output[0][0 : tflite_output[2]]
+            tflite_valid_scores = tflite_output[1][0 : tflite_output[2]]
+
+            tvm_valid_indicies = tvm_output[0][0 : tvm_output[2][0]]
+            tvm_valid_scores = tvm_output[1][0 : tvm_output[2][0]]
+
+            tvm.testing.assert_allclose(
+                tflite_valid_indicies, tvm_valid_indicies, atol=1e-5, rtol=1e-5
+            )
+            tvm.testing.assert_allclose(tflite_valid_scores, tvm_valid_scores, atol=1e-5, rtol=1e-5)
+
+
+def test_forward_nms():
+    """NonMaxSuppressionV5"""
+    for _test_forward_nms in [_test_forward_nms_v5]:
+        _test_forward_nms((5, 4), (5,), 0.7, 0.5, 5)
+        _test_forward_nms((20, 4), (20,), 0.5, 0.6, 10)
+        _test_forward_nms((1000, 4), (1000,), 0.3, 0.7, 1000)
+        _test_forward_nms((2000, 4), (2000,), 0.4, 0.6, 7)
+
 
 #######################################################################
 # Mobilenet
@@ -4818,6 +4902,9 @@ if __name__ == "__main__":
 
     # Overwrite Converter
     test_custom_op_converter()
+
+    # Non Max Suppression
+    test_forward_nms()
 
     # End to End
     test_forward_mobilenet_v1()

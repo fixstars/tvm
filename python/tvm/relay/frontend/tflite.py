@@ -3407,7 +3407,9 @@ class OperatorConverter(object):
         data = _op.concatenate([scores, self.get_tensor_expr(input_tensors[0])], -1)
         data = _op.expand_dims(data, 0, 1)
 
-        ct, data, indices = _op.vision.get_valid_counts(data, score_threshold=score_threshold, id_index=-1, score_index=0)
+        ct, data, indices = _op.vision.get_valid_counts(
+            data, score_threshold=score_threshold, id_index=-1, score_index=0
+        )
 
         # TensorFlow NMS doesn't have parameter top_k
         top_k = -1
@@ -3434,7 +3436,7 @@ class OperatorConverter(object):
 
         # slice to get the dynamic result
         ret = _op.strided_slice(
-            data_slice, begin=[0], end=[100], slice_mode="size"
+            data_slice, begin=[0], end=[int(max_output_size)], slice_mode="size"
         )
 
         # NonMaxSuppressionV5 returns scores.

@@ -1236,6 +1236,57 @@ class BatchMatmulOpConverter : public TensorRTOpConverter {
   }
 };
 
+class ResizeOpConverter : public TensorRTOpConverter {
+ public:
+  ResizeOpConverter() : TensorRTOpConverter({kTensor}) {}
+
+  void Convert(TensorRTOpConverterParams* params) const {
+    auto input = params->inputs.at(0).tensor;
+    auto input_dims = TrtDimsToVector(input->getDimensions());
+    auto str_size = params->node.GetAttr<std::vector<std::string>>("size");
+    auto str_method = params->node.GetAttr<std::vector<std::string>>("method")[0];
+    auto str_coordinate_transformation_mode =
+        params->node.GetAttr<std::vector<std::string>>("coordinate_transformation_mode")[0];
+
+    ICHECK_EQ(params->node.GetAttr<std::vector<std::string>>("layout")[0], "NCHW");
+    ICHECK_EQ(str_size.size(), 2U);
+
+    const int out_h = std::stoi(str_size[0]);
+    const int out_w = std::stoi(str_size[1]);
+
+    auto output_dims = input_dims;
+    const auto h_index = output_dims.size() - 2;
+    const auto w_index = output_dims.size() - 1;
+    output_dims[h_index] = out_h;
+    output_dims[w_index] = out_w;
+
+    static const std::unordered_map<std::string, nvinfer1::ResizeMode> mode_map = {
+        {"nearest_neighbor", nvinfer1::ResizeMode::kNEAREST},
+        {"linear", nvinfer1::ResizeMode::kLINEAR}};
+    auto mode_it = mode_map.find(str_method);
+    ICHECK(mode_it != mode_map.end()) << "Unsupported resize mode " << str_method << " in TensorRT";
+
+    auto resize_layer = params->network->addResize(*input);
+    ICHECK(resize_layer != nullptr);
+
+    resize_layer->setOutputDimensions(VectorToTrtDims(output_dims));
+    resize_layer->setResizeMode(mode_it->second);
+
+#if TRT_VERSION_GE(8, 0, 0)
+    static const std::unordered_map<std::string, nvinfer1::ResizeCoordinateTransformation>
+        coord_map = {{"asymmetric", nvinfer1::ResizeCoordinateTransformation::kALIGN_CORNERS},
+                     {"align_corners", nvinfer1::ResizeCoordinateTransformation::kASYMMETRIC},
+                     { "half_pixel",
+                       nvinfer1::ResizeCoordinateTransformation::kHALF_PIXEL }};
+    auto coord_it = coord_map.find(str_coordinate_transformation_mode);
+    ICHECK(coord_it != coord_map.end()) << "Unsupported coordinate transformation "
+                                        << str_coordinate_transformation_mode << " in TensorRT";
+    resize_layer->setCoordinateTransformation(coord_it.second);
+#endif
+    params->outputs.push_back(resize_layer->getOutput(0));
+  }
+};
+
 const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<TensorRTOpConverter>>>
 GetOpConverters() {
   static auto map =
@@ -1300,6 +1351,7 @@ GetOpConverters() {
   map->emplace("nn.max_pool3d", std::make_shared<Pooling3DOpConverter>());
   map->emplace("nn.avg_pool3d", std::make_shared<Pooling3DOpConverter>());
   map->emplace("nn.conv3d_transpose", std::make_shared<Conv3DTransposeOpConverter>());
+  map->emplace("image.resize", std::make_shared<ResizeOpConverter>());
 #endif  // TRT_VERSION_GE(6, 0, 1)
 #if TRT_VERSION_GE(7, 0, 0)
   map->emplace("erf", std::make_shared<UnaryOpConverter>());

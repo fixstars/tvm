@@ -1208,6 +1208,47 @@ def test_conv3d_transpose(run_module):
         get_graph(strides=(2, 2, 2), output_padding=(1, 1, 1)), run_module=run_module
     )
 
+def test_resize():
+    def get_graph(
+        x_shape=(1, 1, 4, 4),
+        size=[7, 7],
+        method="bilinear",
+        coordinate_transformation_mode="asymmetric",
+        rounding_method="floor",
+    ):
+        x = relay.var("x", shape=(x_shape), dtype="float32")
+        out = relay.image.resize(
+            x,
+            size,
+            layout="NCHW",
+            method=method,
+            coordinate_transformation_mode=coordinate_transformation_mode,
+            rounding_method=rounding_method,
+        )
+        f = relay.Function([x], out)
+        return f, {"x": x_shape}, []
+
+    for size in [[7, 7], [3, 3]]:
+        for method in ["nearest_neighbor", "bilinear"]:
+            for coordinate_transformation_mode in ["asymmetric", "align_corners", "half_pixel"]:
+                for rounding_method in [
+                    "",
+                    "round",
+                    "round_prefer_floor",
+                    "round_prefer_ceil",
+                    "floor",
+                    "ceil",
+                ]:
+                    print(f"{method}, {coordinate_transformation_mode}, {rounding_method}")
+                    run_and_verify_func(
+                        get_graph(
+                            size=size,
+                            method=method,
+                            coordinate_transformation_mode=coordinate_transformation_mode,
+                            rounding_method=rounding_method,
+                        )
+                    )
+
 
 @pytest.mark.xfail(
     reason=("Currently failing test.  See tracking issue https://github.com/apache/tvm/issues/8901")

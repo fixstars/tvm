@@ -639,6 +639,7 @@ Example::
     .set_attrs_type<ReduceAttrs>()
     .set_support_level(4)
     .add_type_rel("Reduce", ReduceRel)
+    .set_attr<FInferCorrectLayout>("FInferCorrectLayout", ReduceInferCorrectLayout)
     .set_attr<FTVMCompute>("FTVMCompute", MeanCompute)
     .set_attr<FInferCorrectLayout>("FInferCorrectLayout", ReduceInferCorrectLayout<ReduceAttrs>)
     .set_attr<TOpPattern>("TOpPattern", kCommReduce);

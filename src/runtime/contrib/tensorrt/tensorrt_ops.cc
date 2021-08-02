@@ -1236,6 +1236,7 @@ class BatchMatmulOpConverter : public TensorRTOpConverter {
   }
 };
 
+#if TRT_VERSION_GE(6, 0, 1)
 class ResizeOpConverter : public TensorRTOpConverter {
  public:
   ResizeOpConverter() : TensorRTOpConverter({kTensor}) {}
@@ -1247,32 +1248,35 @@ class ResizeOpConverter : public TensorRTOpConverter {
     auto str_method = params->node.GetAttr<std::vector<std::string>>("method")[0];
     auto str_coordinate_transformation_mode =
         params->node.GetAttr<std::vector<std::string>>("coordinate_transformation_mode")[0];
+    auto str_rounding_method = params->node.GetAttr<std::vector<std::string>>("rounding_method")[0];
 
     ICHECK_EQ(params->node.GetAttr<std::vector<std::string>>("layout")[0], "NCHW");
     ICHECK_EQ(str_size.size(), 2U);
 
+    // Create layer
+    auto resize_layer = params->network->addResize(*input);
+    ICHECK(resize_layer != nullptr);
+
+    // Set output dimensions
     const int out_h = std::stoi(str_size[0]);
     const int out_w = std::stoi(str_size[1]);
-
     auto output_dims = input_dims;
     const auto h_index = output_dims.size() - 2;
     const auto w_index = output_dims.size() - 1;
     output_dims[h_index] = out_h;
     output_dims[w_index] = out_w;
+    resize_layer->setOutputDimensions(VectorToTrtDims(output_dims));
 
+    // Set resize mode
     static const std::unordered_map<std::string, nvinfer1::ResizeMode> mode_map = {
         {"nearest_neighbor", nvinfer1::ResizeMode::kNEAREST},
-        {"linear", nvinfer1::ResizeMode::kLINEAR}};
+        {"bilinear", nvinfer1::ResizeMode::kLINEAR}};
     auto mode_it = mode_map.find(str_method);
     ICHECK(mode_it != mode_map.end()) << "Unsupported resize mode " << str_method << " in TensorRT";
-
-    auto resize_layer = params->network->addResize(*input);
-    ICHECK(resize_layer != nullptr);
-
-    resize_layer->setOutputDimensions(VectorToTrtDims(output_dims));
     resize_layer->setResizeMode(mode_it->second);
 
 #if TRT_VERSION_GE(8, 0, 0)
+    // Set coordinate transformation
     static const std::unordered_map<std::string, nvinfer1::ResizeCoordinateTransformation>
         coord_map = {{"asymmetric", nvinfer1::ResizeCoordinateTransformation::kALIGN_CORNERS},
                      {"align_corners", nvinfer1::ResizeCoordinateTransformation::kASYMMETRIC},
@@ -1281,11 +1285,40 @@ class ResizeOpConverter : public TensorRTOpConverter {
     auto coord_it = coord_map.find(str_coordinate_transformation_mode);
     ICHECK(coord_it != coord_map.end()) << "Unsupported coordinate transformation "
                                         << str_coordinate_transformation_mode << " in TensorRT";
-    resize_layer->setCoordinateTransformation(coord_it.second);
+    resize_layer->setCoordinateTransformation(coord_it->second);
+
+    // Set round mode
+    static const std::unordered_map<std::string, nvinfer1::ResizeRoundMode> round_map = {
+        {"round", nvinfer1::ResizeRoundMode::kHALF_UP},
+        {"round_prefer_ceil", nvinfer1::ResizeRoundMode::kHALF_UP},
+        {"round_prefer_floor", nvinfer1::ResizeRoundMode::kHALF_DOWN},
+        {"floor", nvinfer1::ResizeRoundMode::kFLOOR},
+        { "ceil",
+          nvinfer1::ResizeRoundMode::kCEIL }};
+    auto round_it = round_map.find(str_rounding_method);
+    ICHECK(round_it != round_map.end())
+        << "Unsupported nearest rounding " << str_rounding_method << " in TensorRT";
+    resize_layer->setNearestRounding(round_it->second);
+#else
+    // cf. https://github.com/onnx/onnx-tensorrt/blob/7.2.1/builtin_op_importers.cpp#L3018
+    if (resize_layer->getResizeMode() == nvinfer1::ResizeMode::kNEAREST) {
+      ICHECK(str_coordinate_transformation_mode == "asymmetric" ||
+             str_coordinate_transformation_mode == "align_corners");
+      ICHECK(str_rounding_method == "floor" ||
+             (str_coordinate_transformation_mode != "align_corners" && str_rounding_method == ""));
+    } else {
+      ICHECK(str_coordinate_transformation_mode == "half_pixel" ||
+             str_coordinate_transformation_mode == "align_corners");
+    }
+
+    if (str_coordinate_transformation_mode == "align_corners") {
+      resize_layer->setAlignCorners(true);
+    }
 #endif
     params->outputs.push_back(resize_layer->getOutput(0));
   }
 };
+#endif
 
 const std::shared_ptr<std::unordered_map<std::string, std::shared_ptr<TensorRTOpConverter>>>
 GetOpConverters() {

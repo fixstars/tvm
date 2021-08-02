@@ -929,11 +929,10 @@ def resize_annotate_fn(expr):  # pylint: disable=unused-variable
     """Check if image.resize is supported by TensorRT."""
 
     attrs, args = expr.attrs, expr.args
-    if get_tensorrt_version() < (6, 0, 1):
-        logger.info("image.resize: TensorRT 6.0.1 or higher is required.")
-        return False
     if any([x.checked_type.dtype != "float32" for x in args]):
         logger.info("Only float32 inputs are supported for TensorRT.")
+        return False
+    if not trt_version_annotate_fn((6, 0, 1))(attrs, args, "image.resize"):
         return False
     if attrs.layout != "NCHW":
         logger.info("image.resize: layout is %s but must be NCHW.", attrs.layout)
@@ -943,6 +942,39 @@ def resize_annotate_fn(expr):  # pylint: disable=unused-variable
             "image.resize: method is %s but must be nearest_neighbor or bilinear.", attrs.method
         )
         return False
+    if get_tensorrt_version() < (8, 0, 0):
+        # NOTE: The behavior in alignCorners=0 is difference by coordinate_transformation_mode
+        # cf. https://github.com/onnx/onnx-tensorrt/blob/7.2.1/builtin_op_importers.cpp#L3018
+        if attrs.method == "nearest_neighbor":
+            if attrs.coordinate_transformation_mode not in ["asymmetric", "align_corners"]:
+                print(attrs.coordinate_transformation_mode)
+                logger.info(
+                    "image.resize: coordinate_transformation_mode is %s "
+                    "but only asymmetric or align_corners are supported in nearest_neighbor "
+                    "for TensorRT < 8.0.0",
+                    attrs.coordinate_transformation_mode,
+                )
+                return False
+            if attrs.rounding_method != "floor" and (
+                attrs.coordinate_transformation_mode == "align_corners"
+                or attrs.rounding_method != ""
+            ):
+                print("hi")
+                logger.info(
+                    "image.resize: rounding_method is %s "
+                    "but only floor is supported for TensorRT < 8.0.0.",
+                    attrs.coordinate_transformation_mode,
+                )
+                return False
+        elif attrs.method == "bilinear":
+            if attrs.coordinate_transformation_mode not in ["half_pixel", "align_coerners"]:
+                logger.info(
+                    "image.resize: coordinate_transformation_mode is %s"
+                    "but only half_pixel or align_corner are supported in bilinear "
+                    "for TensorRT < 8.0.0",
+                    attrs.coordinate_transformation_mode,
+                )
+                return False
     return True
 
 

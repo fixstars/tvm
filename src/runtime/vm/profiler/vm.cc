@@ -180,19 +180,17 @@ void VirtualMachineDebug::InvokePacked(Index packed_index, const PackedFunc& fun
     }
 
     std::unordered_map<std::string, ObjectRef> metrics;
-
-    ICHECK(exec_->op_attrs.find(packed_index) != exec_->op_attrs.end())
-        << packed_index_map_[packed_index] << " not found in op attrs";
-
-    auto& op_attrs = exec_->op_attrs.at(packed_index);
-    for (auto p : op_attrs) {
-      if (std::string(p.first).find("layout") != std::string::npos) {
-        metrics[p.first] = p.second;
+    if (exec_->op_attrs.count(packed_index)) {
+      auto& op_attrs = exec_->op_attrs.at(packed_index);
+      for (auto p : op_attrs) {
+        if (std::string(p.first).find("layout") != std::string::npos) {
+          metrics[p.first] = p.second;
+        }
       }
-    }
-    auto it = op_attrs.find("hash");
-    if (it != op_attrs.end()) {
-      metrics["Hash"] = Downcast<String>((*it).second);
+      auto it = op_attrs.find("hash");
+      if (it != op_attrs.end()) {
+        metrics["Hash"] = Downcast<String>((*it).second);
+      }
     }
     metrics["Argument Shapes"] = profiling::ShapeString(shapes);
 

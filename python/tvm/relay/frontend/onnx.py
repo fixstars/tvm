@@ -2232,7 +2232,15 @@ class Expand(OnnxOpConverter):
                     ],
                     axis=0,
                 )
-            new_shape = _op.maximum(in_shape, shape)
+            # calculate the broadcasted tensor shape from two tensors of the same length.
+            # We use 'where' instead of 'maximum', and select value that is not 1
+            # from two elements for each dimension.
+            # This is because if an element of either shape is 0,
+            # then that element of the broadcasted tensor shape will be 0.
+            new_shape = _op.where(
+                            _op.equal(shape, _op.const(1, dtype)),
+                            in_shape,
+                            shape)
             return new_shape
 
         shape = fold_constant(expand_shape(in_shape, shape))

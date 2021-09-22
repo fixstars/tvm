@@ -82,7 +82,7 @@ def test_local():
         runtime.set_input(0, tvm.nd.array(in_data["data"]))
         runtime.run()
         out = runtime.get_output(0).numpy()
-        np.testing.assert_equal(out, onnx_output[0])
+        np.testing.assert_allclose(out, onnx_output[0], rtol=1e-7, atol=1e-7)
 
 
 def test_remote():
@@ -120,7 +120,7 @@ def test_remote():
         runtime.set_input(0, tvm.nd.array(in_data["data"], remote.cpu(0)))
         runtime.run()
         out = runtime.get_output(0).numpy()
-        np.testing.assert_equal(out, onnx_output[0])
+        np.testing.assert_allclose(out, onnx_output[0], rtol=1e-7, atol=1e-7)
 
     server.terminate()
 

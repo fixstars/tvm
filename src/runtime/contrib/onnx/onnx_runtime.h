@@ -62,8 +62,10 @@ class ONNXRuntime : public ModuleNode {
    * \brief Initialize the onnx runtime with onnx model and device.
    * \param onnx_model_bytes The onnx model.
    * \param dev The device where the onnx model will be executed on.
+   * \param providers The semicolon-separated list of the ONNX runtime execution providers.
    */
-  void Init(const std::string& onnx_model_bytes, Device dev, const int& intra_op_num_threads);
+  void Init(const std::string& onnx_model_bytes, Device dev, const std::string& providers,
+            const int& intra_op_num_threads);
 
   /*!
    * \brief set index-th input to the model.

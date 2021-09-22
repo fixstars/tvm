@@ -112,7 +112,7 @@ PackedFunc ONNXRuntime::GetFunction(const std::string& name,
 }
 
 void ONNXRuntime::Init(const std::string& onnx_model_bytes, Device dev,
-                       const int& intra_op_num_threads) {
+                       const std::string& providers, const int& intra_op_num_threads) {
   // Save the model buffer into heap
   const char* buffer = onnx_model_bytes.c_str();
   const size_t buffer_size = onnx_model_bytes.size();
@@ -125,8 +125,14 @@ void ONNXRuntime::Init(const std::string& onnx_model_bytes, Device dev,
   session_options.SetIntraOpNumThreads(intra_op_num_threads);
   session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_BASIC);
 
+  // Check if trt is enabled
+  if (providers.find("TensorRTExecutionProvider") != std::string::npos) {
+    OrtTensorRTProviderOptions trt_options{dev.device_id};
+    session_options.AppendExecutionProvider_TensorRT(trt_options);
+  }
+
   // Check if cuda is enabled
-  if (dev.device_type == kDLCUDA) {
+  if (providers.find("CUDAExecutionProvider") != std::string::npos) {
     OrtCUDAProviderOptions cuda_options{dev.device_id};
     session_options.AppendExecutionProvider_CUDA(cuda_options);
   }
@@ -190,7 +196,7 @@ void ONNXRuntime::Run() {
                     session_->GetInputCount(), &output_names[0], session_->GetOutputCount());
 
   // Copy output Ort::Values to output_tensors_(NDArray)
-  for (size_t i = 0; i < input_cnt; ++i) {
+  for (size_t i = 0; i < output_cnt; ++i) {
     const Ort::Value& v = outputs[i];
     Ort::TensorTypeAndShapeInfo info = v.GetTensorTypeAndShapeInfo();
 
@@ -235,14 +241,14 @@ void ONNXRuntime::Run() {
 NDArray ONNXRuntime::GetOutput(int index) const { return output_tensors_[index]; }
 
 Module ONNXRuntimeCreate(const std::string& onnx_model_bytes, Device dev,
-                         const int& intra_op_num_threads) {
+                         const std::string& providers, const int& intra_op_num_threads) {
   auto exec = make_object<ONNXRuntime>();
-  exec->Init(onnx_model_bytes, dev, intra_op_num_threads);
+  exec->Init(onnx_model_bytes, dev, providers, intra_op_num_threads);
   return Module(exec);
 }
 
 TVM_REGISTER_GLOBAL("tvm.onnx_runtime.create").set_body([](TVMArgs args, TVMRetValue* rv) {
-  *rv = ONNXRuntimeCreate(args[0], args[1], args[2]);
+  *rv = ONNXRuntimeCreate(args[0], args[1], args[2], args[3]);
 });
 
 TVM_REGISTER_GLOBAL("target.runtime.onnx").set_body_typed(ONNXRuntimeCreate);

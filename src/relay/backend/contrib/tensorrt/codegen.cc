@@ -135,7 +135,8 @@ class TensorRTJSONSerializer : public backend::contrib::JSONSerializer {
     auto process_slice_index = [](Integer x, int default_value, int dim_value) {
       if (!x.defined()) return default_value;
       int value = x.as<IntImmNode>()->value;
-      if (value < 0) value += dim_value + 1;
+      ICHECK_GE(value, -1);
+      if (value == -1) value = dim_value;
       return value;
     };
 

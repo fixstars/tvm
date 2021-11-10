@@ -22,6 +22,7 @@ from tvm import te
 from tvm.tir import if_then_else, exp
 
 from tvm import topi
+from tvm.contrib import nvcc
 
 from ..nms import non_max_suppression
 
@@ -200,7 +201,14 @@ def transform_loc_pre(cls_prob, valid_count, temp_valid_count, temp_cls_id, temp
 
     threshold = tvm.tir.FloatImm("float32", threshold)
 
-    max_threads = int(tvm.target.Target.current(allow_none=False).max_num_threads)
+    target = tvm.target.Target.current(allow_none=False)
+    max_threads = int(target.max_num_threads)
+    # Some cuda architectures have smaller limit of 32K for cudaDevAttrMaxRegistersPerBlock
+    # vs 64K for most GPUs. Since this kernel uses many registers, the limit will
+    # be exceeded with 1024 threads.
+    if target.kind.name == "cuda":
+        if nvcc.get_target_compute_version(target) in ["3.2", "5.3", "6.2"]:
+            max_threads = 512
     nthread_tx = max_threads
     nthread_bx = (batch_size * num_anchors) // max_threads + 1
     tx = te.thread_axis("threadIdx.x")

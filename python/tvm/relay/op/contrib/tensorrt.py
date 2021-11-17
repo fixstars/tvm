@@ -146,7 +146,7 @@ def partition_for_tensorrt(
                     "nn.conv2d": ["NCHW", "default"],
                     "nn.conv3d": ["NCDHW", "default"],
                     "nn.conv2d_transpose": ["NCHW", "default"],
-                    "image.resize": ["NCHW"],
+                    "image.resize2d": ["NCHW"],
                 }
             ),
             transform.FoldConstant(),
@@ -924,22 +924,22 @@ def conv3d_transpose_annotate_fn(expr):  # pylint: disable=unused-variable
     return True
 
 
-@_register_external_dynamic_check_func("image.resize")
+@_register_external_dynamic_check_func("image.resize2d")
 def resize_annotate_fn(expr):  # pylint: disable=unused-variable
-    """Check if image.resize is supported by TensorRT."""
+    """Check if image.resize2d is supported by TensorRT."""
 
     attrs, args = expr.attrs, expr.args
     if any([x.checked_type.dtype != "float32" for x in args]):
         logger.info("Only float32 inputs are supported for TensorRT.")
         return False
-    if not trt_version_annotate_fn((6, 0, 1))(attrs, args, "image.resize"):
+    if not trt_version_annotate_fn((6, 0, 1))(attrs, args, "image.resize2d"):
         return False
     if attrs.layout != "NCHW":
-        logger.info("image.resize: layout is %s but must be NCHW.", attrs.layout)
+        logger.info("image.resize2d: layout is %s but must be NCHW.", attrs.layout)
         return False
     if attrs.method not in ["nearest_neighbor", "bilinear"]:
         logger.info(
-            "image.resize: method is %s but must be nearest_neighbor or bilinear.", attrs.method
+            "image.resize2d: method is %s but must be nearest_neighbor or bilinear.", attrs.method
         )
         return False
     if get_tensorrt_version() < (8, 0, 0):
@@ -949,7 +949,7 @@ def resize_annotate_fn(expr):  # pylint: disable=unused-variable
             if attrs.coordinate_transformation_mode not in ["asymmetric", "align_corners"]:
                 print(attrs.coordinate_transformation_mode)
                 logger.info(
-                    "image.resize: coordinate_transformation_mode is %s "
+                    "image.resize2d: coordinate_transformation_mode is %s "
                     "but only asymmetric or align_corners are supported in nearest_neighbor "
                     "for TensorRT < 8.0.0",
                     attrs.coordinate_transformation_mode,
@@ -961,7 +961,7 @@ def resize_annotate_fn(expr):  # pylint: disable=unused-variable
             ):
                 print("hi")
                 logger.info(
-                    "image.resize: rounding_method is %s "
+                    "image.resize2d: rounding_method is %s "
                     "but only floor is supported for TensorRT < 8.0.0.",
                     attrs.coordinate_transformation_mode,
                 )
@@ -969,7 +969,7 @@ def resize_annotate_fn(expr):  # pylint: disable=unused-variable
         elif attrs.method == "bilinear":
             if attrs.coordinate_transformation_mode not in ["half_pixel", "align_coerners"]:
                 logger.info(
-                    "image.resize: coordinate_transformation_mode is %s"
+                    "image.resize2d: coordinate_transformation_mode is %s"
                     "but only half_pixel or align_corner are supported in bilinear "
                     "for TensorRT < 8.0.0",
                     attrs.coordinate_transformation_mode,

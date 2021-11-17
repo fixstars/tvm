@@ -89,18 +89,6 @@ def convert_image_resize1d(attrs, inputs, tinfos, desired_layouts):
     return resize1d(*inputs, **new_attrs)
 
 
-@reg.register_convert_op_layout("image.resize")
-def convert_resize(attrs, inputs, tinfos, desired_layouts):
-    from tvm import relay
-
-    assert len(desired_layouts) == 1
-    desired_layout = desired_layouts[0]
-    data = inputs
-    new_attrs = dict(attrs)
-    new_attrs["layout"] = desired_layout
-    return relay.image.resize(data[0], **new_attrs)
-
-
 @script
 def _resize1d_shape_func(image_shape, size, batch_axis, width_axis, channel_axis):
     out = output_tensor((3,), "int64")

@@ -1208,16 +1208,16 @@ def test_conv3d_transpose(run_module):
         get_graph(strides=(2, 2, 2), output_padding=(1, 1, 1)), run_module=run_module
     )
 
-def test_resize():
+def test_resize2d():
     def get_graph(
         x_shape=(1, 1, 4, 4),
         size=[7, 7],
-        method="bilinear",
+        method="linear",
         coordinate_transformation_mode="asymmetric",
         rounding_method="floor",
     ):
         x = relay.var("x", shape=(x_shape), dtype="float32")
-        out = relay.image.resize(
+        out = relay.image.resize2d(
             x,
             size,
             layout="NCHW",
@@ -1229,7 +1229,7 @@ def test_resize():
         return f, {"x": x_shape}, []
 
     for size in [[7, 7], [3, 3]]:
-        for method in ["nearest_neighbor", "bilinear"]:
+        for method in ["nearest_neighbor", "linear"]:
             for coordinate_transformation_mode in ["asymmetric", "align_corners", "half_pixel"]:
                 for rounding_method in [
                     "",

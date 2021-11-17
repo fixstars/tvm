@@ -1384,7 +1384,7 @@ GetOpConverters() {
   map->emplace("nn.max_pool3d", std::make_shared<Pooling3DOpConverter>());
   map->emplace("nn.avg_pool3d", std::make_shared<Pooling3DOpConverter>());
   map->emplace("nn.conv3d_transpose", std::make_shared<Conv3DTransposeOpConverter>());
-  map->emplace("image.resize", std::make_shared<ResizeOpConverter>());
+  map->emplace("image.resize2d", std::make_shared<ResizeOpConverter>());
 #endif  // TRT_VERSION_GE(6, 0, 1)
 #if TRT_VERSION_GE(7, 0, 0)
   map->emplace("erf", std::make_shared<UnaryOpConverter>());

@@ -30,8 +30,6 @@
 #include <memory>
 #include <string>
 
-#include "edgetpu.h"
-
 #include "../tflite/tflite_runtime.h"
 #include "edgetpu.h"
 

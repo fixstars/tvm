@@ -40,7 +40,6 @@
 #include "../file_utils.h"
 #include "../library_module.h"
 #include "serialize_utils.h"
-#include "./profiler/vm.h"
 
 namespace tvm {
 namespace runtime {
@@ -84,12 +83,6 @@ PackedFunc Executable::GetFunction(const std::string& name, const ObjectPtr<Obje
       auto vm = make_object<VirtualMachine>();
       vm->LoadExecutable(this);
       *rv = Module(vm);
-    });
-  } else if (name == "vm_profiler_load_executable") {
-    return PackedFunc([sptr_to_self, this](TVMArgs args, TVMRetValue* rv) {
-      auto vm_profiler = make_object<VirtualMachineDebug>();
-      vm_profiler->LoadExecutable(this);
-      *rv = Module(vm_profiler);
     });
   } else {
     LOG(FATAL) << "Unknown packed function: " << name;

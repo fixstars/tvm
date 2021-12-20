@@ -243,7 +243,7 @@ def compile_model(
         partition_function = codegen["pass_pipeline"]
         mod = partition_function(mod, params, **codegen_from_cli["opts"])
         if codegen["config_key"] is not None:
-            config[codegen["config_key"]] = codegen_from_cli["opts"] or codegen_config
+            config[codegen["config_key"]] = codegen_from_cli["opts"]
 
     if tuning_records and os.path.exists(tuning_records):
         logger.debug("tuning records file provided: %s", tuning_records)
